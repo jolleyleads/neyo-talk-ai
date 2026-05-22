@@ -1,0 +1,137 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Neyo Talk</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+    <aside>
+        <h1>Neyo Talk</h1>
+        <p>AI + SI Command Chat</p>
+
+        <button onclick="setMode('normal')">Chat</button>
+        <button onclick="setMode('deep')">Deep Think</button>
+        <button onclick="setMode('image')">Create Images</button>
+        <button onclick="setMode('website')">Create Websites</button>
+        <button onclick="setMode('memory')">Save Memory</button>
+
+        <hr>
+        <button onclick="viewMemory()">View Memory</button>
+        <button onclick="clearMemory()">Clear Memory</button>
+
+        <div class="status">
+            <b>Mode:</b> <span id="modeLabel">normal</span>
+        </div>
+    </aside>
+
+    <main>
+        <div class="topbar">
+            <h2>Neyo Talk</h2>
+            <span>Smart AI assistant with memory, voice, deep thinking, image prompts, and website generation.</span>
+        </div>
+
+        <div id="chat"></div>
+
+        <div class="composer">
+            <textarea id="message" placeholder="Ask Neyo Talk anything..."></textarea>
+            <div class="actions">
+                <button onclick="sendMessage()">Send</button>
+                <button onclick="startVoice()">🎙 Voice</button>
+                <button onclick="speakLast()">🔊 Speak</button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+let mode = "normal";
+let lastReply = "";
+
+function setMode(m){
+    mode = m;
+    document.getElementById("modeLabel").innerText = m;
+}
+
+function addBubble(text, who){
+    const chat = document.getElementById("chat");
+    const div = document.createElement("div");
+    div.className = "bubble " + who;
+    div.innerText = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+}
+
+function sendMessage(){
+    const box = document.getElementById("message");
+    const msg = box.value.trim();
+    if(!msg) return;
+
+    addBubble(msg, "user");
+    box.value = "";
+    addBubble("Thinking...", "bot loading");
+
+    fetch("/api/chat", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({message:msg, mode:mode})
+    })
+    .then(r=>r.json())
+    .then(data=>{
+        document.querySelector(".loading").remove();
+        lastReply = data.reply;
+        addBubble(data.reply, "bot");
+    });
+}
+
+function startVoice(){
+    if(!("webkitSpeechRecognition" in window)){
+        alert("Voice recognition works best in Chrome/Edge desktop.");
+        return;
+    }
+    const rec = new webkitSpeechRecognition();
+    rec.lang = "en-US";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = function(event){
+        document.getElementById("message").value = event.results[0][0].transcript;
+    };
+    rec.start();
+}
+
+function speakLast(){
+    if(!lastReply){
+        alert("No reply to speak yet.");
+        return;
+    }
+    const utter = new SpeechSynthesisUtterance(lastReply);
+    utter.rate = 1;
+    utter.pitch = 1;
+    speechSynthesis.speak(utter);
+}
+
+function viewMemory(){
+    fetch("/api/memories")
+    .then(r=>r.json())
+    .then(data=>{
+        addBubble(JSON.stringify(data, null, 2), "bot");
+    });
+}
+
+function clearMemory(){
+    fetch("/api/clear-memory", {method:"POST"})
+    .then(r=>r.json())
+    .then(data=>{
+        addBubble("Memory cleared.", "bot");
+    });
+}
+
+document.getElementById("message").addEventListener("keydown", function(e){
+    if(e.key === "Enter" && !e.shiftKey){
+        e.preventDefault();
+        sendMessage();
+    }
+});
+</script>
+</body>
+</html>
